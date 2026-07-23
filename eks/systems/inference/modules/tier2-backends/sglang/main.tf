@@ -32,25 +32,24 @@ resource "helm_release" "sglang" {
   create_namespace = true
 
   # GPU scheduling
-  set {
-    name  = "resources.limits.nvidia\\.com/gpu"
-    value = "1"
-  }
-
-  set {
-    name  = "tolerations[0].key"
-    value = "nvidia.com/gpu"
-  }
-
-  set {
-    name  = "tolerations[0].operator"
-    value = "Exists"
-  }
-
-  set {
-    name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
+  set = [
+    {
+      name  = "resources.limits.nvidia\\.com/gpu"
+      value = "1"
+    },
+    {
+      name  = "tolerations[0].key"
+      value = "nvidia.com/gpu"
+    },
+    {
+      name  = "tolerations[0].operator"
+      value = "Exists"
+    },
+    {
+      name  = "tolerations[0].effect"
+      value = "NoSchedule"
+    },
+  ]
 }
 
 output "status" {

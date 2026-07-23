@@ -39,10 +39,12 @@ resource "helm_release" "bifrost" {
   namespace        = var.namespace
   create_namespace = true
 
-  set {
-    name  = "config.defaultBackend"
-    value = var.inference_router
-  }
+  set = [
+    {
+      name  = "config.defaultBackend"
+      value = var.inference_router
+    },
+  ]
 }
 
 output "status" {

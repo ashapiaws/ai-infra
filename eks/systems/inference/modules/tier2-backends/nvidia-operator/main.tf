@@ -31,20 +31,20 @@ resource "helm_release" "nvidia_operator" {
   namespace        = var.namespace
   create_namespace = true
 
-  set {
-    name  = "driver.enabled"
-    value = "true"
-  }
-
-  set {
-    name  = "toolkit.enabled"
-    value = "true"
-  }
-
-  set {
-    name  = "devicePlugin.enabled"
-    value = "true"
-  }
+  set = [
+    {
+      name  = "driver.enabled"
+      value = "true"
+    },
+    {
+      name  = "toolkit.enabled"
+      value = "true"
+    },
+    {
+      name  = "devicePlugin.enabled"
+      value = "true"
+    },
+  ]
 }
 
 output "status" {

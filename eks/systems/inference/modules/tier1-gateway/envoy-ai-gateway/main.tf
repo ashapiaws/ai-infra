@@ -64,39 +64,39 @@ resource "helm_release" "envoy_ai_gateway" {
   namespace        = var.namespace
   create_namespace = true
 
-  # Core routing config
-  set {
-    name  = "aiGateway.defaultBackend"
-    value = var.inference_router
-  }
-
-  # Rate limiting
-  set {
-    name  = "rateLimit.enabled"
-    value = tostring(var.enable_rate_limiting)
-  }
-
-  dynamic "set" {
-    for_each = var.enable_rate_limiting ? [1] : []
-    content {
-      name  = "rateLimit.defaultRPS"
-      value = tostring(var.rate_limit_rps)
-    }
-  }
-
-  # Bedrock routing
-  set {
-    name  = "backends.bedrock.enabled"
-    value = tostring(var.bedrock_routing)
-  }
-
-  dynamic "set" {
-    for_each = var.bedrock_routing ? [1] : []
-    content {
-      name  = "backends.bedrock.models"
-      value = join(",", var.bedrock_models)
-    }
-  }
+  set = concat(
+    [
+      # Core routing config
+      {
+        name  = "aiGateway.defaultBackend"
+        value = var.inference_router
+      },
+      # Rate limiting
+      {
+        name  = "rateLimit.enabled"
+        value = tostring(var.enable_rate_limiting)
+      },
+      # Bedrock routing
+      {
+        name  = "backends.bedrock.enabled"
+        value = tostring(var.bedrock_routing)
+      },
+    ],
+    # Conditional: rate limit RPS
+    var.enable_rate_limiting ? [
+      {
+        name  = "rateLimit.defaultRPS"
+        value = tostring(var.rate_limit_rps)
+      },
+    ] : [],
+    # Conditional: Bedrock models
+    var.bedrock_routing ? [
+      {
+        name  = "backends.bedrock.models"
+        value = join(",", var.bedrock_models)
+      },
+    ] : [],
+  )
 }
 
 output "status" {

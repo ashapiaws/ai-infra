@@ -31,10 +31,12 @@ resource "helm_release" "kgateway" {
   namespace        = var.namespace
   create_namespace = true
 
-  set {
-    name  = "gateway.enabled"
-    value = "true"
-  }
+  set = [
+    {
+      name  = "gateway.enabled"
+      value = "true"
+    },
+  ]
 }
 
 output "status" {
