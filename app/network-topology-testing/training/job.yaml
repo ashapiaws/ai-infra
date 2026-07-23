@@ -1,0 +1,222 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Network Topology Training Job — 3 Node DDP
+#
+# Scheduling Modes (uncomment ONE affinity block at a time):
+#
+#   1. MULTI-AZ (Cross-AZ inter-node communication)
+#      - Nodes spread across availability zones
+#      - Highest latency: cross-AZ network hops
+#      - Use: topology.kubernetes.io/zone anti-affinity
+#
+#   2. SINGLE-AZ, CROSS-SPINE (Same AZ, different spines)
+#      - Nodes in same AZ but different network spines
+#      - Medium latency: traffic traverses spine switches
+#      - Use: zone affinity + spine anti-affinity
+#
+#   3. SINGLE-AZ, SINGLE-SPINE (Same AZ, same spine)
+#      - Nodes under same spine/leaf switch
+#      - Lowest latency: single-hop leaf switch communication
+#      - Use: spine affinity
+#
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: topology-training
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: training-headless
+  namespace: topology-training
+spec:
+  clusterIP: None
+  selector:
+    app: topology-training
+  ports:
+    - name: nccl
+      port: 29500
+      targetPort: 29500
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: topology-training-ddp
+  namespace: topology-training
+  labels:
+    app: topology-training
+    test: network-topology
+spec:
+  parallelism: 3
+  completions: 3
+  completionMode: Indexed
+  template:
+    metadata:
+      labels:
+        app: topology-training
+        test: network-topology
+    spec:
+      subdomain: training-headless
+      restartPolicy: Never
+
+      # ─────────────────────────────────────────────────────────────────────
+      # SCHEDULING TOPOLOGY — Uncomment ONE section below
+      # ─────────────────────────────────────────────────────────────────────
+
+      # ┌─────────────────────────────────────────────────────────────────┐
+      # │ OPTION 1: MULTI-AZ (spread across availability zones)          │
+      # │                                                                 │
+      # │ Nodes land in different AZs. All-reduce traffic crosses AZ     │
+      # │ boundaries — highest latency, tests worst-case placement.      │
+      # │                                                                 │
+      # │ Relevant labels:                                                │
+      # │   topology.kubernetes.io/zone = us-west-2a, us-west-2b, etc.  │
+      # └─────────────────────────────────────────────────────────────────┘
+      # affinity:
+      #   podAntiAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       - labelSelector:
+      #           matchLabels:
+      #             app: topology-training
+      #         topologyKey: "topology.kubernetes.io/zone"
+
+      # ┌─────────────────────────────────────────────────────────────────┐
+      # │ OPTION 2: SINGLE-AZ, CROSS-SPINE                               │
+      # │                                                                 │
+      # │ All nodes in same AZ (zone affinity) but on different spines   │
+      # │ (spine anti-affinity). Traffic stays in-AZ but crosses spine   │
+      # │ switches — medium latency.                                      │
+      # │                                                                 │
+      # │ Relevant labels:                                                │
+      # │   topology.kubernetes.io/zone                                  │
+      # │   topology.k8s.aws/spine-id (or equivalent HyperPod label)    │
+      # │   node.kubernetes.io/instance-type                             │
+      # └─────────────────────────────────────────────────────────────────┘
+      # affinity:
+      #   nodeAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       nodeSelectorTerms:
+      #         - matchExpressions:
+      #             - key: topology.kubernetes.io/zone
+      #               operator: In
+      #               values:
+      #                 - us-west-2a  # Pin to a single AZ
+      #   podAntiAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       - labelSelector:
+      #           matchLabels:
+      #             app: topology-training
+      #         topologyKey: "topology.k8s.aws/spine-id"
+
+      # ┌─────────────────────────────────────────────────────────────────┐
+      # │ OPTION 3: SINGLE-AZ, SINGLE-SPINE (co-located)                 │
+      # │                                                                 │
+      # │ All nodes on the same spine — lowest latency. All-reduce       │
+      # │ traffic stays within a single leaf/spine domain.               │
+      # │                                                                 │
+      # │ Relevant labels:                                                │
+      # │   topology.k8s.aws/spine-id                                    │
+      # │   vpc.amazonaws.com/efa-capable = "true"                       │
+      # │   node.kubernetes.io/instance-type                             │
+      # └─────────────────────────────────────────────────────────────────┘
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: topology-training
+              topologyKey: "topology.k8s.aws/spine-id"
+
+      # ─────────────────────────────────────────────────────────────────────
+      # Node selector — target GPU nodes with EFA
+      # ─────────────────────────────────────────────────────────────────────
+      nodeSelector:
+        node.kubernetes.io/instance-type: p4d.24xlarge  # Or p5.48xlarge, trn1.32xlarge
+        # vpc.amazonaws.com/efa-capable: "true"
+
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+
+      containers:
+        - name: training
+          image: <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/topology-training:latest
+          args:
+            - "--nnodes=3"
+            - "--nproc_per_node=8"
+            - "--rdzv_id=topology-test"
+            - "--rdzv_backend=c10d"
+            - "--rdzv_endpoint=topology-training-ddp-0.training-headless.topology-training.svc.cluster.local:29500"
+            - "train.py"
+
+          env:
+            # ── NCCL Configuration ──
+            - name: NCCL_ALGO
+              value: "Ring"
+            - name: NCCL_PROTO
+              value: "Simple"
+            - name: NCCL_DEBUG
+              value: "INFO"      # Set to WARN in production
+            - name: NCCL_TOPO_FILE
+              value: "/opt/aws/topology.xml"
+            - name: NCCL_SOCKET_IFNAME
+              value: "eth0"
+
+            # ── EFA Configuration ──
+            - name: FI_PROVIDER
+              value: "efa"
+            - name: FI_EFA_USE_DEVICE_RDMA
+              value: "1"
+            - name: FI_EFA_FORK_SAFE
+              value: "1"
+            - name: RDMAV_FORK_SAFE
+              value: "1"
+
+            # ── Distributed Config ──
+            - name: MASTER_ADDR
+              value: "topology-training-ddp-0.training-headless.topology-training.svc.cluster.local"
+            - name: MASTER_PORT
+              value: "29500"
+
+            # ── Pod Identity (for indexed job) ──
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+          resources:
+            requests:
+              nvidia.com/gpu: 8
+              # vpc.amazonaws.com/efa: 4       # EFA interfaces (p4d has 4)
+              memory: "128Gi"
+              cpu: "48"
+            limits:
+              nvidia.com/gpu: 8
+              # vpc.amazonaws.com/efa: 4
+              memory: "192Gi"
+              cpu: "96"
+
+          ports:
+            - containerPort: 29500
+              name: rdzv
+            - containerPort: 8000
+              name: metrics
+
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: results
+              mountPath: /workspace/results
+
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "64Gi"   # Large shared memory for NCCL
+        - name: results
+          emptyDir: {}

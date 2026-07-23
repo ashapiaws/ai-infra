@@ -1,0 +1,52 @@
+# Gateway resource - provisions an ALB via AWS Load Balancer Controller
+# Pattern 1: ALB terminates external TLS, re-encrypts (HTTPS) to Istio Ingress Gateway
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: istio-alb-gateway
+  namespace: istio-system
+  annotations:
+    # ALB scheme and type
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # ACM Certificate ARN (from Terraform output)
+    alb.ingress.kubernetes.io/certificate-arn: "${ACM_CERTIFICATE_ARN}"
+
+    # SSL policy for external TLS
+    alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-TLS13-1-2-2021-06"
+
+    # Backend protocol - HTTPS for TLS re-encryption to Istio
+    alb.ingress.kubernetes.io/backend-protocol: "HTTPS"
+
+    # Health check configuration targeting Istio pilot agent
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz/ready
+    alb.ingress.kubernetes.io/healthcheck-port: "15021"
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "3"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+
+    # Listen on HTTPS (443) externally
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+
+    # SSL redirect from HTTP to HTTPS
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+
+    # Tags for the ALB
+    alb.ingress.kubernetes.io/tags: "Environment=dev,Pattern=alb-tls-reencrypt,ManagedBy=gateway-api"
+spec:
+  gatewayClassName: aws-alb
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: istio-ingress-tls
+            namespace: istio-system
+      allowedRoutes:
+        namespaces:
+          from: All

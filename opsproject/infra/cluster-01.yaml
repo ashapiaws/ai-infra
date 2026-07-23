@@ -1,0 +1,66 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: dev-ops-cluster-02
+  region: us-east-2
+  version: "1.33"
+
+iam:
+  withOIDC: true
+
+vpc:
+  subnets:
+    private:
+      us-east-2a: { id: subnet-051b1804545a4e3d3 } # Primary and FSxL
+      us-east-2b: { id: subnet-099b951fa3e709a3b }
+
+addons:
+  - name: aws-ebs-csi-driver
+    version: latest
+
+
+managedNodeGroups:
+  - name: ng-g-01
+    instanceType: g6e.12xlarge
+    minSize: 2
+    desiredCapacity: 2
+    maxSize: 3
+    #placement in specific AZ
+    availabilityZones: ["us-east-2a"]
+    volumeSize: 200
+    privateNetworking: true
+    amiFamily: AmazonLinux2023
+    # get id:  aws ssm get-parameter --name /aws/service/eks/optimized-ami/1.32/amazon-linux-2023/x86_64/standard/recommended/image_id \
+   # --region us-east-2 --query "Parameter.Value" --output text
+    #ami: ami-0d5da9c8f7d56d189
+    #EFA Supported Instance install drivers and conigure interfaces
+    efaEnabled: true
+    iam:
+      withAddonPolicies:
+        ebs: true
+        fsx: true
+        efs: true
+  #Placement Group config, have two PG test-rack0[1-2]
+    placement:
+       groupName: test-rack-01
+
+    preBootstrapCommands:
+        - |
+          echo "$(date): Installing Lustre and Git clients..."
+          sudo dnf -y install lustre-client git
+    
+    overrideBootstrapCommand: |
+          apiVersion: node.eks.aws/v1alpha1
+          kind: NodeConfig
+          spec:
+            instance:
+             localStorage:
+                strategy: RAID0
+    labels:
+      role: compute
+    tags:
+      env: dev
+      role: compute
+      team: ops-team
+      auto-delete: "no"

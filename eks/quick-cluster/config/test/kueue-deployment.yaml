@@ -1,0 +1,49 @@
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: Topology
+metadata:
+  name: "default"
+  namespace: "kueue-system"
+spec:
+  levels:
+  - nodeLabel: "topology.k8s.aws/network-node-layer-2" ## NN Layer 2 is Block
+  - nodeLabel: "topology.k8s.aws/network-node-layer-3" # NN Layer 3 is Rack
+ # - nodeLabel: "kubernetes.io/hostname" # Taints on nodes are only respected if this label is the lowest topology level.
+---
+kind: ResourceFlavor
+apiVersion: kueue.x-k8s.io/v1beta1
+metadata:
+  name: "tas-flavor"
+spec:
+  nodeLabels:
+    node.kubernetes.io/instance-type: "g6e.8xlarge"
+  topologyName: "default"
+  tolerations:
+  - key: "nvidia.com/gpu" # Most cloud providers auto inject the toleration to the pods based on the nodeSelector via a webhook. However, TAS isn't aware of the webhook, so you need to manually add the toleration here.
+    operator: "Exists"
+    effect: "NoSchedule"
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: "tas-cluster-queue"
+spec:
+  namespaceSelector: {} # match all.
+  resourceGroups:
+  - coveredResources: ["cpu", "memory", "nvidia.com/gpu"]
+    flavors:
+    - name: "tas-flavor"
+      resources:
+      - name: "cpu"
+        nominalQuota: 60
+      - name: "memory"
+        nominalQuota: 100Gi
+      - name: "nvidia.com/gpu"
+        nominalQuota: 3
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  namespace: "default"
+  name: "tas-user-queue"
+spec:
+  clusterQueue: "tas-cluster-queue"

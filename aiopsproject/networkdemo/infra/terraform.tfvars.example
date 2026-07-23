@@ -1,0 +1,110 @@
+# EKS Terraform Infrastructure Configuration Example
+# Copy this file to terraform.tfvars and update with your values
+
+# ============================================================================
+# REQUIRED VARIABLES
+# ============================================================================
+
+# Cluster Configuration
+cluster_name       = "my-eks-cluster"
+kubernetes_version = "1.28"  # Supported versions: 1.27, 1.28, 1.29, 1.30
+region             = "us-east-1"
+
+# Network Configuration
+vpc_id             = "vpc-0123456789abcdef0"  # Replace with your VPC ID
+private_subnet_ids = [
+  "subnet-0123456789abcdef0",  # Private subnet in AZ 1
+  "subnet-0123456789abcdef1",  # Private subnet in AZ 2
+  "subnet-0123456789abcdef2",  # Private subnet in AZ 3
+]
+
+# ============================================================================
+# OPTIONAL VARIABLES (with defaults shown)
+# ============================================================================
+
+# Cluster Endpoint Access
+# Set to true if you need to access the cluster API from outside the VPC
+enable_public_access = false
+# public_access_cidrs = ["203.0.113.0/24"]  # Restrict public access to specific CIDRs
+
+# Node Group Configuration
+node_instance_types      = ["t3.medium"]  # Options: t3.small, t3.medium, t3.large, m5.large, etc.
+node_group_min_size      = 2
+node_group_max_size      = 10
+node_group_desired_size  = 3
+capacity_type            = "ON_DEMAND"  # Options: ON_DEMAND, SPOT
+disk_size                = 20  # GB
+
+# Security Configuration
+# Uncomment and provide KMS key ARN for envelope encryption of Kubernetes secrets
+# kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+
+# Add-on Versions
+# Leave as null to use the latest compatible version for your cluster
+# To pin specific versions, uncomment and specify the version
+# vpc_cni_version                    = "v1.15.1-eksbuild.1"
+# coredns_version                    = "v1.10.1-eksbuild.2"
+# kube_proxy_version                 = "v1.28.1-eksbuild.1"
+# ebs_csi_version                    = "v1.25.0-eksbuild.1"
+# lb_controller_version              = "v1.6.2-eksbuild.1"
+# cloudwatch_observability_version   = "v1.2.0-eksbuild.1"
+# adot_version                       = "v0.88.0-eksbuild.1"
+
+# Additional IAM Policies
+# Attach additional IAM policies to cluster or node roles if needed
+# additional_cluster_iam_policy_arns = [
+#   "arn:aws:iam::123456789012:policy/MyCustomClusterPolicy"
+# ]
+# additional_node_iam_policy_arns = [
+#   "arn:aws:iam::123456789012:policy/MyCustomNodePolicy"
+# ]
+
+# Resource Tagging
+tags = {
+  Environment = "dev"
+  Project     = "my-project"
+  ManagedBy   = "terraform"
+  Owner       = "platform-team"
+}
+
+# ============================================================================
+# EXAMPLE CONFIGURATIONS FOR DIFFERENT ENVIRONMENTS
+# ============================================================================
+
+# Development Environment Example:
+# - Smaller instance types
+# - Fewer nodes
+# - SPOT instances for cost savings
+# cluster_name            = "dev-eks-cluster"
+# node_instance_types     = ["t3.small"]
+# node_group_min_size     = 1
+# node_group_max_size     = 3
+# node_group_desired_size = 2
+# capacity_type           = "SPOT"
+
+# Staging Environment Example:
+# - Medium instance types
+# - Moderate node count
+# - ON_DEMAND instances
+# cluster_name            = "staging-eks-cluster"
+# node_instance_types     = ["t3.medium"]
+# node_group_min_size     = 2
+# node_group_max_size     = 6
+# node_group_desired_size = 3
+# capacity_type           = "ON_DEMAND"
+
+# Production Environment Example:
+# - Larger instance types
+# - Higher node count
+# - ON_DEMAND instances
+# - KMS encryption enabled
+# - Public access disabled
+# cluster_name            = "prod-eks-cluster"
+# kubernetes_version      = "1.28"
+# node_instance_types     = ["m5.large", "m5.xlarge"]
+# node_group_min_size     = 3
+# node_group_max_size     = 20
+# node_group_desired_size = 5
+# capacity_type           = "ON_DEMAND"
+# enable_public_access    = false
+# kms_key_arn            = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"

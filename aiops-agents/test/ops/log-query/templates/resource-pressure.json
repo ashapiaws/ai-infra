@@ -1,0 +1,17 @@
+{
+  "name": "resource-pressure",
+  "description": "Identify nodes and pods under resource pressure (CPU/Memory)",
+  "version": "1.0.0",
+  "parameters": {
+    "cluster_name": { "type": "string", "required": true },
+    "time_range_minutes": { "type": "integer", "default": 30 },
+    "cpu_threshold_pct": { "type": "number", "default": 80 },
+    "memory_threshold_pct": { "type": "number", "default": 85 }
+  },
+  "query": "fields @timestamp, NodeName, PodName, Namespace, CpuUtilized, CpuReserved, MemoryUtilized, MemoryReserved\n| filter CpuUtilized / CpuReserved * 100 > ${cpu_threshold_pct} OR MemoryUtilized / MemoryReserved * 100 > ${memory_threshold_pct}\n| stats avg(CpuUtilized / CpuReserved * 100) as avg_cpu_pct, avg(MemoryUtilized / MemoryReserved * 100) as avg_mem_pct by PodName, Namespace\n| sort avg_cpu_pct desc\n| limit 15",
+  "log_group": "/aws/containerinsights/${cluster_name}/performance",
+  "output_format": {
+    "type": "table",
+    "columns": ["pod_name", "namespace", "avg_cpu_pct", "avg_mem_pct"]
+  }
+}

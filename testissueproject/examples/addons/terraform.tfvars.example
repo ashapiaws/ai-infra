@@ -1,0 +1,261 @@
+# EKS Observability Stack - Addons Example Configuration
+# This example shows comprehensive addon configuration for different use cases
+
+# Basic Configuration
+aws_region   = "us-west-2"
+cluster_name = "example-eks-cluster"
+vpc_id       = "vpc-12345678"  # Replace with your VPC ID
+
+# AWS EKS Addons Configuration
+aws_addons = {
+  # EBS CSI Driver - Required for persistent volumes
+  "aws-ebs-csi-driver" = {
+    enabled                     = true
+    addon_version              = "v1.36.0-eksbuild.1"
+    create_service_account_role = true
+    iam_policy_arns = [
+      "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+    ]
+    tags = {
+      Component = "storage"
+    }
+  }
+  
+  # EFS CSI Driver - For shared file systems
+  "aws-efs-csi-driver" = {
+    enabled                     = true
+    addon_version              = "v2.1.1-eksbuild.1"
+    create_service_account_role = true
+    iam_policy_arns = [
+      "arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy"
+    ]
+    tags = {
+      Component = "storage"
+      Type      = "shared"
+    }
+  }
+  
+  # FSx CSI Driver - For high-performance file systems
+  "aws-fsx-csi-driver" = {
+    enabled                     = true
+    addon_version              = "v1.2.0-eksbuild.1"
+    create_service_account_role = true
+    iam_policy_arns = [
+      "arn:aws:iam::aws:policy/AmazonFSxFullAccess"
+    ]
+    tags = {
+      Component   = "storage"
+      Type        = "high-performance"
+      Performance = "lustre"
+    }
+  }
+
+  # Metrics Server - For resource metrics collection
+  "metrics-server" = {
+    enabled       = true
+    addon_version = "v0.7.2-eksbuild.1"
+    tags = {
+      Component = "monitoring"
+      Type      = "metrics"
+    }
+  }
+}
+
+# Third-party Helm Addons Configuration
+# All addon configurations are managed in modules/addons/helm-values/*.yaml
+# Environment files only control which addons are enabled/disabled
+helm_addons = {
+  # NVIDIA GPU Operator - For ML workloads
+  # Configuration: modules/addons/helm-values/nvidia-gpu-operator.yaml
+  "nvidia-gpu-operator" = {
+    enabled = true
+    tags = {
+      Component = "compute"
+      Type      = "gpu"
+      Workload  = "ml"
+    }
+  }
+  
+  # Cluster Autoscaler - For automatic node scaling
+  # Configuration: modules/addons/helm-values/cluster-autoscaler.yaml
+  "cluster-autoscaler" = {
+    enabled = true
+    tags = {
+      Component = "autoscaling"
+      Type      = "cluster"
+    }
+  }
+
+  # Prometheus Node Exporter - For node metrics
+  # Configuration: modules/addons/helm-values/prometheus-node-exporter.yaml
+  "prometheus-node-exporter" = {
+    enabled = true
+    tags = {
+      Component = "monitoring"
+      Type      = "metrics"
+    }
+  }
+
+  # Metrics Server - For resource metrics
+  # Configuration: modules/addons/helm-values/metrics-server.yaml
+  "metrics-server" = {
+    enabled = true
+    tags = {
+      Component = "monitoring"
+      Type      = "metrics"
+    }
+  }
+}
+
+# Node Groups Configuration (with GPU support for NVIDIA addon)
+node_groups = {
+  primary = {
+    instance_types = ["m5.large"]
+    capacity_type  = "ON_DEMAND"
+    
+    scaling_config = {
+      min_size     = 2
+      max_size     = 10
+      desired_size = 3
+    }
+    
+    placement_group = {
+      strategy = "cluster"
+      enabled  = true
+    }
+    
+    labels = {
+      role        = "primary"
+      environment = "example"
+    }
+    taints = []
+    
+    ami_type  = "AL2023_x86_64_STANDARD"
+    disk_size = 50
+    
+    raid0_config = {
+      enabled     = false
+      mount_point = "/mnt/raid0"
+      filesystem  = "ext4"
+    }
+  }
+  
+  # GPU node group for ML workloads
+  secondary = {
+    instance_types = ["g6e.xlarge"]  # GPU instance for NVIDIA addon
+    capacity_type  = "ON_DEMAND"
+    
+    scaling_config = {
+      min_size     = 0
+      max_size     = 5
+      desired_size = 1
+    }
+    
+    placement_group = {
+      strategy = "cluster"
+      enabled  = true
+    }
+    
+    labels = {
+      role        = "gpu"
+      environment = "example"
+      accelerator = "nvidia"
+    }
+    taints = [
+      {
+        key    = "nvidia.com/gpu"
+        value  = "true"
+        effect = "NO_SCHEDULE"
+      }
+    ]
+    
+    ami_type  = "AL2023_x86_64_NVIDIA"
+    disk_size = 100
+    
+    raid0_config = {
+      enabled     = true
+      mount_point = "/mnt/nvme-raid0"
+      filesystem  = "xfs"
+    }
+  }
+}
+
+# Observability Configuration
+observability_config = {
+  namespace = "monitoring"
+  
+  storage_classes = {
+    create_gp3_classes = true
+    default_class      = "gp3-high-iops"
+  }
+  
+  prometheus = {
+    chart_version       = "80.13.2"
+    retention_days      = 30
+    storage_class       = "gp3-high-iops"
+    storage_size        = "100Gi"
+    scrape_interval     = "30s"
+    evaluation_interval = "30s"
+    
+    resource_limits = {
+      cpu    = "2000m"
+      memory = "8Gi"
+    }
+    resource_requests = {
+      cpu    = "1000m"
+      memory = "4Gi"
+    }
+  }
+  
+  grafana = {
+    chart_version  = "7.0.8"
+    admin_password = "SecurePassword123!"
+    storage_class  = "gp3"
+    storage_size   = "20Gi"
+    
+    ingress = {
+      enabled     = true
+      host        = "grafana.example.com"
+      tls_enabled = true
+      annotations = {
+        "kubernetes.io/ingress.class"                = "alb"
+        "alb.ingress.kubernetes.io/scheme"           = "internet-facing"
+        "alb.ingress.kubernetes.io/target-type"      = "ip"
+        "alb.ingress.kubernetes.io/certificate-arn"  = "arn:aws:acm:us-west-2:123456789:certificate/example-cert"
+      }
+    }
+    
+    resource_limits = {
+      cpu    = "1000m"
+      memory = "2Gi"
+    }
+    resource_requests = {
+      cpu    = "500m"
+      memory = "1Gi"
+    }
+  }
+  
+  alertmanager = {
+    enabled       = true
+    storage_class = "gp3"
+    storage_size  = "10Gi"
+    
+    resource_limits = {
+      cpu    = "200m"
+      memory = "256Mi"
+    }
+    resource_requests = {
+      cpu    = "100m"
+      memory = "128Mi"
+    }
+  }
+}
+
+# Tags
+default_tags = {
+  Project     = "eks-observability-stack"
+  Environment = "example"
+  Owner       = "platform-team"
+  ManagedBy   = "terraform"
+  Purpose     = "addon-demonstration"
+}

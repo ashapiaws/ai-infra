@@ -1,0 +1,172 @@
+# Example Terraform variables for basic EKS observability stack deployment
+# Copy this file to terraform.tfvars and customize the values
+
+# AWS Configuration
+aws_region = "us-west-2"
+
+# EKS Cluster Configuration
+cluster_name       = "my-eks-cluster"
+kubernetes_version = "1.28"
+
+# Network Configuration - Simplified!
+# Just provide VPC ID, subnets will be auto-discovered
+vpc_id = "vpc-12345678"
+
+# Subnet Configuration (Optional)
+# If subnet_ids is empty, subnets will be automatically discovered
+# subnet_ids = []  # Leave empty for auto-discovery
+subnet_type = "private"  # Use private subnets (recommended for EKS)
+# subnet_type = "public"   # Uncomment to use public subnets instead
+
+# Advanced: Custom subnet naming patterns (optional)
+# subnet_name_patterns = {
+#   private = "(?i)(priv|private|internal)"  # Matches: priv, private, internal (case-insensitive)
+#   public  = "(?i)(pub|public|external|dmz)"   # Matches: pub, public, external, dmz (case-insensitive)
+# }
+
+# Manual subnet specification (optional)
+# Uncomment to manually specify subnets instead of auto-discovery
+# subnet_ids = [
+#   "subnet-12345678",  # Private subnet in AZ-a
+#   "subnet-87654321",  # Private subnet in AZ-b
+# ]
+
+# Cluster Endpoint Configuration
+endpoint_config = {
+  private_access      = true
+  public_access       = true
+  public_access_cidrs = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+}
+
+# Logging Configuration
+logging_config = {
+  enable_types   = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+  retention_days = 14
+}
+
+# Node Groups Configuration - Simplified
+node_groups = {
+  primary = {
+    instance_types = ["t3.medium"]
+    capacity_type  = "ON_DEMAND"
+    
+    scaling_config = {
+      min_size     = 1
+      max_size     = 5
+      desired_size = 2
+    }
+    
+    placement_group = {
+      strategy = "cluster"
+      enabled  = true
+    }
+    
+    labels = {
+      role = "primary"
+    }
+    taints = []
+    
+    ami_type  = "AL2_x86_64"
+    disk_size = 50
+  }
+  
+  secondary = {
+    instance_types = ["t3.medium"]
+    capacity_type  = "SPOT"
+    
+    scaling_config = {
+      min_size     = 0
+      max_size     = 10
+      desired_size = 1
+    }
+    
+    placement_group = {
+      strategy = "cluster"
+      enabled  = false  # Disabled for spot instances
+    }
+    
+    labels = {
+      role = "secondary"
+    }
+    taints = []
+    
+    ami_type  = "AL2_x86_64"
+    disk_size = 50
+  }
+}
+
+# Remote Access (Optional) - Uncomment to enable SSH access
+# enable_remote_access = true
+# ssh_key_name = "my-key-pair"
+
+# IRSA (Optional) - Uncomment to enable IAM Roles for Service Accounts
+# enable_irsa = true
+
+# Observability Configuration - Simplified
+observability_config = {
+  namespace = "monitoring"
+  
+  prometheus = {
+    chart_version       = "25.8.0"
+    retention_days      = 30
+    storage_class       = "gp3"
+    storage_size        = "50Gi"
+    scrape_interval     = "30s"
+    evaluation_interval = "30s"
+    
+    resource_limits = {
+      cpu    = "1000m"
+      memory = "4Gi"
+    }
+    resource_requests = {
+      cpu    = "500m"
+      memory = "2Gi"
+    }
+  }
+  
+  grafana = {
+    chart_version  = "7.0.8"
+    admin_password = "SecurePassword123!"  # Change this!
+    storage_class  = "gp3"
+    storage_size   = "10Gi"
+    
+    ingress = {
+      enabled     = false  # Set to true for external access
+      host        = "grafana.example.com"
+      tls_enabled = false
+      annotations = {}
+    }
+    
+    resource_limits = {
+      cpu    = "500m"
+      memory = "1Gi"
+    }
+    resource_requests = {
+      cpu    = "250m"
+      memory = "512Mi"
+    }
+  }
+  
+  alertmanager = {
+    enabled       = true
+    storage_class = "gp3"
+    storage_size  = "5Gi"
+    
+    resource_limits = {
+      cpu    = "200m"
+      memory = "256Mi"
+    }
+    resource_requests = {
+      cpu    = "100m"
+      memory = "128Mi"
+    }
+  }
+}
+
+# Default Tags
+default_tags = {
+  Project     = "eks-observability-stack"
+  Environment = "production"
+  Owner       = "platform-team"
+  ManagedBy   = "terraform"
+}

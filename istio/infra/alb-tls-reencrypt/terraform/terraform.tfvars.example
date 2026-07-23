@@ -1,0 +1,17 @@
+# Required variables
+domain_name      = "*.example.com"
+route53_zone_name = "example.com"
+
+# Optional: Additional SANs
+# subject_alternative_names = ["api.example.com", "app.example.com"]
+
+# Optional overrides
+aws_region  = "us-east-1"
+environment = "dev"
+name_prefix = "istio-alb-reencrypt"
+
+# Tags
+tags = {
+  Project = "istio-deployment"
+  Team    = "platform"
+}

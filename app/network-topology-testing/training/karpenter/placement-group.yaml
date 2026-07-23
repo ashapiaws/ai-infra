@@ -1,0 +1,49 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# EC2 Cluster Placement Group — Pre-requisite
+#
+# This must be created BEFORE applying the Karpenter NodePool/NodeClass.
+# A cluster placement group packs instances into a single spine/rack
+# for lowest possible inter-node latency.
+#
+# Create via AWS CLI:
+#   aws ec2 create-placement-group \
+#     --group-name training-same-spine-pg \
+#     --strategy cluster \
+#     --region us-west-2
+#
+# Or via Terraform (recommended):
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Terraform snippet for reference:
+#
+# resource "aws_placement_group" "training_same_spine" {
+#   name     = "training-same-spine-pg"
+#   strategy = "cluster"
+#
+#   tags = {
+#     Name         = "training-same-spine-pg"
+#     topology-test = "same-spine"
+#     Purpose      = "network-topology-testing"
+#   }
+# }
+#
+# Note: Cluster placement groups have limitations:
+#   - All instances must be the same type
+#   - Limited to instances in a single AZ
+#   - Capacity may be constrained (use capacity reservations for guaranteed supply)
+#   - Maximum instances depends on instance type (typically sufficient for 3-node test)
+
+---
+# CloudFormation equivalent (if using CFN):
+# AWSTemplateFormatVersion: '2010-09-09'
+# Resources:
+#   TrainingSameSpinePG:
+#     Type: AWS::EC2::PlacementGroup
+#     Properties:
+#       GroupName: training-same-spine-pg
+#       Strategy: cluster
+#       Tags:
+#         - Key: Name
+#           Value: training-same-spine-pg
+#         - Key: topology-test
+#           Value: same-spine

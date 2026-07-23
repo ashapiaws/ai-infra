@@ -1,0 +1,41 @@
+# Cluster Autoscaler Helm Values
+# Default configuration for automatic node scaling
+
+# Autoscaler configuration
+autoDiscovery:
+  clusterName: CLUSTER_NAME_PLACEHOLDER  # Will be replaced by Terraform
+
+# AWS region
+awsRegion: AWS_REGION_PLACEHOLDER  # Will be replaced by Terraform
+
+# Service Account configuration
+rbac:
+  create: true
+  serviceAccount:
+    name: cluster-autoscaler
+    create: false  # Created by Terraform with IRSA
+
+# Autoscaler behavior
+autoscalingGroups: []  # Auto-discovery is used instead
+
+# Resource limits
+resources:
+  limits:
+    cpu: 100m
+    memory: 300Mi
+  requests:
+    cpu: 100m
+    memory: 300Mi
+
+# Extra arguments
+extraArgs:
+  balance-similar-node-groups: true
+  skip-nodes-with-system-pods: false
+  expander: least-waste
+
+# Node selector and tolerations
+nodeSelector: {}
+tolerations: []
+
+# Priority expander configuration
+expanderPriorities: {}

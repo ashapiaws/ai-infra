@@ -1,0 +1,61 @@
+# LiteLLM Proxy Configuration
+# AI Gateway for routing inference calls to vLLM backends
+#
+# LiteLLM provides:
+# - OpenAI-compatible API (single interface for all backends)
+# - Load balancing across multiple vLLM instances
+# - Request routing (model-based, priority-based)
+# - Rate limiting and spend tracking
+# - Fallback and retry logic
+# - Observability (Prometheus metrics, request logging)
+
+model_list:
+  # Primary model — single GPU deployment
+  - model_name: "llama-3.1-8b"
+    litellm_params:
+      model: "openai/llama-3.1-8b"
+      api_base: "http://vllm-inference.inference.svc.cluster.local:8000/v1"
+      api_key: "not-needed"
+      max_retries: 2
+      timeout: 120
+    model_info:
+      description: "Llama 3.1 8B on single L40S"
+      max_input_tokens: 8192
+      max_output_tokens: 4096
+
+  # Large model — multi-GPU deployment
+  - model_name: "llama-3.1-70b"
+    litellm_params:
+      model: "openai/llama-3.1-70b"
+      api_base: "http://vllm-70b-inference.inference.svc.cluster.local:8000/v1"
+      api_key: "not-needed"
+      max_retries: 2
+      timeout: 300
+    model_info:
+      description: "Llama 3.1 70B on 4x L40S with tensor parallelism"
+      max_input_tokens: 8192
+      max_output_tokens: 4096
+
+# Router settings
+router_settings:
+  routing_strategy: "least-busy"  # Options: simple-shuffle, least-busy, latency-based-routing
+  num_retries: 2
+  timeout: 120
+  retry_after: 5
+  allowed_fails: 3
+
+# General settings
+general_settings:
+  master_key: "sk-CHANGE-ME-IN-PRODUCTION"
+  database_url: ""  # Optional: PostgreSQL for persistent logging
+  alerting:
+    - "prometheus"
+
+litellm_settings:
+  # Enable request/response logging
+  success_callback: ["prometheus"]
+  failure_callback: ["prometheus"]
+  set_verbose: false
+  drop_params: true  # Drop unsupported params instead of erroring
+  max_budget: 0  # 0 = unlimited (self-hosted)
+  budget_duration: "30d"

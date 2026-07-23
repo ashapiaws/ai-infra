@@ -1,0 +1,17 @@
+{
+  "name": "latency-breakdown",
+  "description": "Analyze request latency patterns from application logs",
+  "version": "1.0.0",
+  "parameters": {
+    "cluster_name": { "type": "string", "required": true },
+    "time_range_minutes": { "type": "integer", "default": 15 },
+    "namespace": { "type": "string", "default": "aiops-app" },
+    "percentile": { "type": "integer", "default": 95 }
+  },
+  "query": "fields @timestamp, @message\n| filter kubernetes.namespace_name = '${namespace}'\n| filter @message like /response_time|latency|duration/\n| parse @message /(?<latency_ms>\\d+)\\s*ms/\n| stats avg(latency_ms) as avg_latency, pct(latency_ms, ${percentile}) as p${percentile}_latency, max(latency_ms) as max_latency, count(*) as request_count by bin(5m)\n| sort @timestamp desc",
+  "log_group": "/aws/containerinsights/${cluster_name}/application",
+  "output_format": {
+    "type": "timeseries",
+    "columns": ["timestamp", "avg_latency", "p_latency", "max_latency", "request_count"]
+  }
+}

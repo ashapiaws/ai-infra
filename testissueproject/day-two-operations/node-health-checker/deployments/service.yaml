@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-health-checker-metrics
+  namespace: kube-system
+  labels:
+    app: node-health-checker
+    component: monitoring
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for DaemonSet
+  selector:
+    app: node-health-checker
+  ports:
+  - name: metrics
+    port: 9100
+    targetPort: metrics
+    protocol: TCP
+  - name: health
+    port: 8080
+    targetPort: health
+    protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: node-health-checker
+  namespace: kube-system
+  labels:
+    app: node-health-checker
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: node-health-checker
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    scheme: http
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_node_name]
+      targetLabel: node
+      action: replace
+    - sourceLabels: [__meta_kubernetes_namespace]
+      targetLabel: namespace
+      action: replace
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: pod
+      action: replace

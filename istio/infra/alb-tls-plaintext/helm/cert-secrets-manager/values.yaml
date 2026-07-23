@@ -1,0 +1,37 @@
+# Cross-Namespace Certificate Management via AWS Secrets Manager + External Secrets Operator
+# For ALB Plaintext pattern - certificates used for mesh-internal TLS (not ALB-to-Istio)
+
+externalSecrets:
+  enabled: true
+
+  # ClusterSecretStore configuration
+  secretStore:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+    provider:
+      aws:
+        service: SecretsManager
+        region: us-east-1
+        auth:
+          jwt:
+            serviceAccountRef:
+              name: external-secrets-sa
+              namespace: external-secrets
+
+  # ExternalSecret configuration
+  externalSecret:
+    name: istio-mesh-tls
+    refreshInterval: 1h
+    secretArn: ""  # Set to your AWS Secrets Manager secret ARN
+
+  # Target namespaces where the TLS secret will be created
+  targetNamespaces:
+    - istio-system
+    # - app-namespace-1
+    # - app-namespace-2
+
+  # Name of the K8s TLS secret created in each namespace
+  secretName: istio-mesh-tls
+
+  # Secret type
+  secretType: kubernetes.io/tls

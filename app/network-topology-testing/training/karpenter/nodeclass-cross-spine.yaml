@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# EC2NodeClass — Cross-Spine (NO Placement Group)
+#
+# Standard provisioning without a placement group. g6e.8xlarge instances
+# may be placed on different spines, providing the cross-spine baseline
+# for comparison against the placement-group topology.
+# g6e.8xlarge: 1x NVIDIA L40S GPU, 32 vCPUs, 256GB RAM, 1x EFA interface.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: training-cross-spine
+spec:
+  amiSelectorTerms:
+    - alias: al2023@latest
+
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "${CLUSTER_NAME}"
+
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "${CLUSTER_NAME}"
+
+  instanceProfile: "${INSTANCE_PROFILE}"
+
+  # ─── NO placement group ───
+  # Instances can land anywhere in the AZ — likely different spines
+
+  # g6e.8xlarge supports 1 EFA interface
+  networkInterfaces:
+    - associatePublicIPAddress: false
+      deviceIndex: 0
+      groups: []
+    - associatePublicIPAddress: false
+      interfaceType: efa
+      deviceIndex: 1
+      groups: []
+
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 100Gi
+        volumeType: gp3
+        iops: 3000
+        throughput: 125
+        deleteOnTermination: true
+
+  tags:
+    topology-test: cross-spine
+    placement-group: none

@@ -1,0 +1,156 @@
+---
+# vLLM Inference Server — Base Pattern
+# Target: Single GPU (g5.xlarge / g6.xlarge / g6e.xlarge)
+# Model: meta-llama/Llama-3.1-8B-Instruct
+#
+# This is the base deployment. Swap model, GPU count, and instance type
+# via the ConfigMap to test different configurations.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-config
+  namespace: inference
+data:
+  MODEL_ID: "meta-llama/Llama-3.1-8B-Instruct"
+  MAX_MODEL_LEN: "8192"
+  TENSOR_PARALLEL_SIZE: "1"
+  GPU_MEMORY_UTILIZATION: "0.90"
+  # vLLM feature flags — toggle to experiment
+  ENABLE_PREFIX_CACHING: "true"
+  ENABLE_CHUNKED_PREFILL: "true"
+  MAX_NUM_SEQS: "256"
+  # Quantization: set to "awq", "gptq", "fp8", or leave empty for FP16
+  QUANTIZATION: ""
+  # Speculative decoding: set draft model or leave empty
+  SPECULATIVE_MODEL: ""
+  SPECULATIVE_NUM_TOKENS: "5"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hf-token
+  namespace: inference
+type: Opaque
+data:
+  # Base64-encoded HuggingFace token — replace with your token
+  # echo -n "hf_YOUR_TOKEN" | base64
+  token: "REPLACE_WITH_BASE64_ENCODED_TOKEN"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-inference
+  namespace: inference
+  labels:
+    app: vllm-inference
+    model: llama-3-1-8b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-inference
+  template:
+    metadata:
+      labels:
+        app: vllm-inference
+        model: llama-3-1-8b
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Schedule on GPU nodes
+      nodeSelector:
+        node.kubernetes.io/instance-type: g6e.xlarge
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          env:
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+          args:
+            - "--model"
+            - "$(MODEL_ID)"
+            - "--max-model-len"
+            - "$(MAX_MODEL_LEN)"
+            - "--tensor-parallel-size"
+            - "$(TENSOR_PARALLEL_SIZE)"
+            - "--gpu-memory-utilization"
+            - "$(GPU_MEMORY_UTILIZATION)"
+            - "--max-num-seqs"
+            - "$(MAX_NUM_SEQS)"
+            - "--enable-prefix-caching"
+            - "--enable-chunked-prefill"
+            - "--port"
+            - "8000"
+            - "--served-model-name"
+            - "llama-3.1-8b"
+          envFrom:
+            - configMapRef:
+                name: vllm-config
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            timeoutSeconds: 10
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 50Gi
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-inference
+  namespace: inference
+  labels:
+    app: vllm-inference
+spec:
+  selector:
+    app: vllm-inference
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  type: ClusterIP

@@ -1,0 +1,138 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# EFA & NCCL Baseline Validation Job
+#
+# Launches the same training container across 3 nodes but runs validation
+# checks instead of training. Confirms:
+#   - EFA devices are visible and libfabric can use them
+#   - NCCL initializes correctly across all nodes
+#   - All-reduce produces correct results
+#   - Baseline bandwidth numbers are within expected range
+#   - Point-to-point connectivity works between nodes
+#
+# Run this BEFORE the topology training tests to ensure the cluster is healthy.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: efa-nccl-validate
+  namespace: topology-training
+  labels:
+    app: efa-nccl-validate
+    test: baseline-validation
+spec:
+  parallelism: 3
+  completions: 3
+  completionMode: Indexed
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600  # Auto-cleanup after 1 hour
+  template:
+    metadata:
+      labels:
+        app: efa-nccl-validate
+        test: baseline-validation
+    spec:
+      subdomain: validate-headless
+      restartPolicy: Never
+
+      # No topology constraints — just validate EFA/NCCL works on any 3 nodes
+      nodeSelector:
+        node.kubernetes.io/instance-type: p4d.24xlarge  # Or p5.48xlarge, trn1.32xlarge
+        # vpc.amazonaws.com/efa-capable: "true"
+
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+
+      containers:
+        - name: validate
+          image: <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/topology-training:latest
+          args:
+            - "--nnodes=3"
+            - "--nproc_per_node=1"
+            - "--rdzv_id=efa-validate"
+            - "--rdzv_backend=c10d"
+            - "--rdzv_endpoint=efa-nccl-validate-0.validate-headless.topology-training.svc.cluster.local:29500"
+            - "validate.py"
+
+          env:
+            # ── NCCL ──
+            - name: NCCL_DEBUG
+              value: "INFO"
+            - name: NCCL_TOPO_FILE
+              value: "/opt/aws/topology.xml"
+            - name: NCCL_SOCKET_IFNAME
+              value: "eth0"
+            - name: NCCL_ALGO
+              value: "Ring"
+
+            # ── EFA ──
+            - name: FI_PROVIDER
+              value: "efa"
+            - name: FI_EFA_USE_DEVICE_RDMA
+              value: "1"
+            - name: FI_EFA_FORK_SAFE
+              value: "1"
+            - name: RDMAV_FORK_SAFE
+              value: "1"
+
+            # ── Distributed ──
+            - name: MASTER_ADDR
+              value: "efa-nccl-validate-0.validate-headless.topology-training.svc.cluster.local"
+            - name: MASTER_PORT
+              value: "29500"
+
+            # ── Pod Identity ──
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+          resources:
+            requests:
+              nvidia.com/gpu: 1              # Only 1 GPU per node for validation
+              # vpc.amazonaws.com/efa: 4     # Still request all EFA interfaces
+              memory: "16Gi"
+              cpu: "4"
+            limits:
+              nvidia.com/gpu: 1
+              # vpc.amazonaws.com/efa: 4
+              memory: "32Gi"
+              cpu: "8"
+
+          ports:
+            - containerPort: 29500
+              name: rdzv
+
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: results
+              mountPath: /workspace/results
+
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "8Gi"
+        - name: results
+          emptyDir: {}
+---
+# Headless service for pod DNS resolution
+apiVersion: v1
+kind: Service
+metadata:
+  name: validate-headless
+  namespace: topology-training
+spec:
+  clusterIP: None
+  selector:
+    app: efa-nccl-validate
+  ports:
+    - name: rdzv
+      port: 29500
+      targetPort: 29500

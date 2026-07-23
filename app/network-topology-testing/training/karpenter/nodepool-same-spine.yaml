@@ -1,0 +1,52 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Karpenter NodePool — Same-Spine (Placement Group)
+#
+# Nodes provisioned with a cluster placement group to guarantee
+# low-latency, single-spine network topology. All instances are
+# physically co-located within the same network spine.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: training-same-spine
+spec:
+  template:
+    metadata:
+      labels:
+        topology-test/node-group: same-spine
+        topology-test/placement: clustered
+        workload-type: distributed-training
+    spec:
+      requirements:
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values:
+            - g6e.8xlarge
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values:
+            - on-demand
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values:
+            - us-west-2a   # Pin to single AZ for placement group
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: training-same-spine
+      taints:
+        - key: nvidia.com/gpu
+          effect: NoSchedule
+
+  # Limits for this node group
+  limits:
+    cpu: "96"        # 3 x g6e.8xlarge (32 vCPUs each)
+    memory: "768Gi"  # 3 x 256GB
+    nvidia.com/gpu: "3"   # 3 x 1 L40S GPU
+
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 5m
+
+  # Weight — prefer same-spine nodes for topology-test workloads
+  weight: 50

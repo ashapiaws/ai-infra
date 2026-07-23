@@ -1,0 +1,33 @@
+# Cross-Namespace Certificate Management via Kubernetes Replicator
+# For ALB Plaintext pattern - certificates used for mesh-internal TLS
+
+replicator:
+  enabled: true
+  controller:
+    installChart: true
+    chartVersion: "2.9.2"
+
+certificate:
+  enabled: true
+  name: istio-mesh-cert
+  namespace: istio-system
+  secretName: istio-mesh-tls
+
+  hookEnabled: true
+  hookWeight: "-5"
+
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.example.com"
+    - "*.istio-system.svc.cluster.local"
+  duration: 2160h
+  renewBefore: 720h
+
+  # Kubernetes Replicator annotations
+  secretAnnotations:
+    replicator.v1/replicate-to: "default"
+
+targetNamespaces:
+  - default

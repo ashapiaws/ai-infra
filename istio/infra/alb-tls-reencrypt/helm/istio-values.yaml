@@ -1,0 +1,83 @@
+# Istio Helm Values - ALB with TLS Re-encryption Pattern
+# This configures Istio Ingress Gateway with ClusterIP service type
+# ALB terminates external TLS and re-encrypts to Istio on port 443
+
+global:
+  meshConfig:
+    defaultConfig:
+      gatewayTopology:
+        numTrustedProxies: 1  # Trust ALB as single proxy hop for X-Forwarded-For
+
+# Istio Ingress Gateway Configuration
+gateways:
+  istio-ingressgateway:
+    enabled: true
+    type: ClusterIP  # Required for ALB IP target type
+    ports:
+      - port: 443
+        targetPort: 8443
+        name: https
+        protocol: TCP
+      - port: 15021
+        targetPort: 15021
+        name: status-port
+        protocol: TCP
+
+    # Resource sizing (configurable for day-2 operations)
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+    # Autoscaling
+    autoscaleEnabled: true
+    autoscaleMin: 1
+    autoscaleMax: 5
+
+    # Pod annotations
+    podAnnotations: {}
+
+    # Service annotations
+    serviceAnnotations: {}
+
+    # Node selector and tolerations
+    nodeSelector: {}
+    tolerations: []
+
+# Istio Gateway Resource
+gateway:
+  enabled: true
+  name: main-gateway
+  namespace: istio-system
+  servers:
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: istio-ingress-tls  # K8s TLS secret name
+      hosts:
+        - "*.example.com"
+
+# VirtualService (default routing)
+virtualService:
+  enabled: true
+  name: default-route
+  namespace: istio-system
+  hosts:
+    - "*.example.com"
+  gateways:
+    - main-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: httpbin.default.svc.cluster.local
+            port:
+              number: 8000

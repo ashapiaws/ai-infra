@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Karpenter NodePool — Cross-Spine (No Placement Group)
+#
+# Nodes provisioned WITHOUT a placement group. Instances may land on
+# different spines within the same AZ, resulting in multi-hop
+# network communication for all-reduce operations.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: training-cross-spine
+spec:
+  template:
+    metadata:
+      labels:
+        topology-test/node-group: cross-spine
+        topology-test/placement: spread
+        workload-type: distributed-training
+    spec:
+      requirements:
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values:
+            - g6e.8xlarge
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values:
+            - on-demand
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values:
+            - us-west-2a
+            - us-west-2b   # Allow multiple AZs (no placement group constraint)
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: training-cross-spine
+      taints:
+        - key: nvidia.com/gpu
+          effect: NoSchedule
+
+  # Limits for this node group
+  limits:
+    cpu: "96"        # 3 x g6e.8xlarge (32 vCPUs each)
+    memory: "768Gi"  # 3 x 256GB
+    nvidia.com/gpu: "3"   # 3 x 1 L40S GPU
+
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 5m
+
+  # Lower weight — use for cross-spine tests only when explicitly targeted
+  weight: 10

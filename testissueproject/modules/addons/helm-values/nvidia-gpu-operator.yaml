@@ -1,0 +1,51 @@
+# NVIDIA GPU Operator Helm Values
+# Default configuration for GPU support with DCGM metrics collection
+
+# Operator configuration
+operator:
+  defaultRuntime: containerd
+
+# NVIDIA Container Toolkit configuration
+toolkit:
+  env:
+    - name: CONTAINERD_CONFIG
+      value: /etc/containerd/config.toml
+    - name: CONTAINERD_SOCKET
+      value: /run/containerd/containerd.sock
+    - name: CONTAINERD_RUNTIME_CLASS
+      value: nvidia
+    - name: CONTAINERD_SET_AS_DEFAULT
+      value: "true"
+
+# DCGM Exporter configuration for Prometheus metrics
+dcgmExporter:
+  enabled: true
+  
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    honorLabels: true
+    additionalLabels:
+      release: kube-prometheus-stack
+  
+  # Resource limits
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Driver configuration
+driver:
+  enabled: true
+
+# Device Plugin configuration
+devicePlugin:
+  enabled: true
+
+# GPU Feature Discovery
+gfd:
+  enabled: true

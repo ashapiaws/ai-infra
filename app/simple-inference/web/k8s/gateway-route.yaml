@@ -1,0 +1,62 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: chat-ui-route
+  namespace: inference-app
+spec:
+  parentRefs:
+    - name: kgateway
+      namespace: kgateway-system
+  hostnames:
+    - "chat.ai.local"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: chat-ui
+          port: 80
+---
+# Envoy AI Gateway routing config
+# Routes model-a and model-b to their respective vLLM backends
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: inference-route
+  namespace: envoy-ai-gateway
+spec:
+  parentRefs:
+    - name: envoy-ai-gateway
+      namespace: envoy-ai-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+          headers:
+            - name: x-model-id
+              value: model-a
+      backendRefs:
+        - name: vllm-model-a
+          namespace: vllm
+          port: 8000
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+          headers:
+            - name: x-model-id
+              value: model-b
+      backendRefs:
+        - name: vllm-model-b
+          namespace: vllm
+          port: 8000
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - name: vllm-model-a
+          namespace: vllm
+          port: 8000

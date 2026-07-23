@@ -1,0 +1,56 @@
+---
+# Tests DNS resolution and outbound internet connectivity
+apiVersion: v1
+kind: Pod
+metadata:
+  name: external-connectivity-test
+  namespace: infra-test
+  labels:
+    test: pod-to-external
+  annotations:
+    description: "Validates DNS resolution and outbound internet access"
+spec:
+  restartPolicy: Never
+  containers:
+    - name: curl
+      image: curlimages/curl:8.11.0
+      command:
+        - sh
+        - -c
+        - |
+          echo "=== Test 1: DNS Resolution ==="
+          if nslookup aws.amazon.com > /dev/null 2>&1; then
+            echo "PASS: DNS resolution working"
+          else
+            echo "FAIL: DNS resolution failed"
+            exit 1
+          fi
+
+          echo ""
+          echo "=== Test 2: HTTPS Outbound (AWS STS) ==="
+          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" https://sts.amazonaws.com/)
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "403" ]; then
+            echo "PASS: Outbound HTTPS working (HTTP $HTTP_CODE)"
+          else
+            echo "FAIL: Outbound HTTPS failed (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+
+          echo ""
+          echo "=== Test 3: External API Call ==="
+          if curl -sf https://httpbin.org/status/200 > /dev/null; then
+            echo "PASS: External API reachable"
+          else
+            echo "FAIL: External API unreachable"
+            exit 1
+          fi
+
+          echo ""
+          echo "All external connectivity tests passed."
+      resources:
+        requests:
+          cpu: 50m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi

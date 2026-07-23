@@ -1,0 +1,87 @@
+{
+  "operation_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "version": "1.0.0",
+  "type": "health_check",
+  "timestamp": "2025-02-10T14:30:00Z",
+  "duration_ms": 4500,
+  "status": "success",
+  "context": {
+    "cluster": "aiops-test-cluster",
+    "region": "us-west-2",
+    "namespace": "aiops-app",
+    "trigger": "scheduled",
+    "triggered_by": "cron:health-check-15m"
+  },
+  "data_sources": [
+    {
+      "type": "cloudwatch_metrics",
+      "query": "node_cpu_utilization",
+      "parameters": { "period_minutes": 15, "stat": "Average" },
+      "result_count": 1,
+      "from_cache": false
+    },
+    {
+      "type": "cloudwatch_metrics",
+      "query": "node_memory_utilization",
+      "parameters": { "period_minutes": 15, "stat": "Average" },
+      "result_count": 1,
+      "from_cache": true
+    },
+    {
+      "type": "cloudwatch_logs",
+      "query": "error-summary",
+      "parameters": { "namespace": "aiops-app", "time_range_minutes": 15 },
+      "result_count": 3,
+      "from_cache": false
+    },
+    {
+      "type": "kubernetes",
+      "query": "get_pod_status",
+      "parameters": { "namespace": "aiops-app" },
+      "result_count": 4,
+      "from_cache": false
+    }
+  ],
+  "result": {
+    "summary": "Cluster healthy. Minor memory pressure on frontend pods (78% avg). 3 non-critical errors in last 15 minutes related to Redis connection timeouts.",
+    "findings": [
+      {
+        "severity": "warning",
+        "component": "frontend-7d9f8b6c4-x2k1p",
+        "observation": "Memory utilization at 78%, approaching 80% threshold",
+        "evidence": "CloudWatch metric: pod_memory_utilization avg=78.2% over 15m",
+        "recommendation": "Consider increasing memory limits from 256Mi to 384Mi",
+        "auto_remediation_available": false
+      },
+      {
+        "severity": "info",
+        "component": "frontend",
+        "observation": "3 Redis connection timeout errors in 15m window",
+        "evidence": "Log query error-summary: 'Redis connection timeout after 5000ms' x3",
+        "recommendation": "Monitor for escalation. May indicate Redis memory pressure under load.",
+        "auto_remediation_available": false
+      }
+    ],
+    "metrics_snapshot": {
+      "cpu_utilization_avg": 42.1,
+      "memory_utilization_avg": 68.5,
+      "pod_restart_count": 0,
+      "error_log_count": 3,
+      "node_count": 2
+    },
+    "confidence": 0.95
+  },
+  "actions_taken": [
+    {
+      "action": "none",
+      "target": "cluster",
+      "status": "skipped",
+      "approval_required": false
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1850,
+    "output_tokens": 420,
+    "data_tokens_saved_by_filtering": 3200
+  }
+}

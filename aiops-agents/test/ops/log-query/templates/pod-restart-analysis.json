@@ -1,0 +1,16 @@
+{
+  "name": "pod-restart-analysis",
+  "description": "Identify pods with recent restarts and correlate with OOMKill or CrashLoopBackOff events",
+  "version": "1.0.0",
+  "parameters": {
+    "cluster_name": { "type": "string", "required": true },
+    "time_range_minutes": { "type": "integer", "default": 60 },
+    "namespace": { "type": "string", "default": "aiops-app" }
+  },
+  "query": "fields @timestamp, @message, kubernetes.pod_name, kubernetes.container_name\n| filter @message like /(?i)(oomkill|crashloopbackoff|backoff|restart|killed)/\n| filter kubernetes.namespace_name = '${namespace}'\n| stats count(*) as event_count, earliest(@timestamp) as first_seen, latest(@timestamp) as last_seen by kubernetes.pod_name, kubernetes.container_name\n| sort event_count desc\n| limit 10",
+  "log_group": "/aws/containerinsights/${cluster_name}/application",
+  "output_format": {
+    "type": "table",
+    "columns": ["pod_name", "container_name", "event_count", "first_seen", "last_seen"]
+  }
+}

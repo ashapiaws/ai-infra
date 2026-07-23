@@ -1,0 +1,153 @@
+{
+  "title": "AIOps Operation Format v1",
+  "description": "Structured, repeatable format for DevOps Agent operations. Every agent action is logged in this format for auditability and replay.",
+  "version": "1.0.0",
+  "type": "object",
+  "required": ["operation_id", "version", "type", "timestamp", "status", "context", "result"],
+  "properties": {
+    "operation_id": {
+      "type": "string",
+      "description": "Unique identifier for this operation (UUID v4)",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "version": {
+      "type": "string",
+      "description": "Operations format version",
+      "const": "1.0.0"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["health_check", "diagnosis", "remediation", "alert_response", "query"],
+      "description": "Type of operation performed"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the operation was initiated"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "description": "Total operation duration in milliseconds"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "partial", "failed", "timeout", "requires_approval"],
+      "description": "Final status of the operation"
+    },
+    "context": {
+      "type": "object",
+      "description": "Environmental context for reproducibility",
+      "required": ["cluster", "region"],
+      "properties": {
+        "cluster": { "type": "string" },
+        "region": { "type": "string" },
+        "namespace": { "type": "string" },
+        "trigger": {
+          "type": "string",
+          "enum": ["scheduled", "alert", "manual", "escalation"],
+          "description": "What initiated this operation"
+        },
+        "triggered_by": {
+          "type": "string",
+          "description": "Alert ARN, user, or schedule name"
+        }
+      }
+    },
+    "data_sources": {
+      "type": "array",
+      "description": "What data was consulted during this operation",
+      "items": {
+        "type": "object",
+        "required": ["type", "query"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["cloudwatch_logs", "cloudwatch_metrics", "kubernetes", "opensearch"]
+          },
+          "query": {
+            "type": "string",
+            "description": "Template name or metric key used"
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Parameters passed to the query"
+          },
+          "result_count": {
+            "type": "integer",
+            "description": "Number of results returned"
+          },
+          "from_cache": {
+            "type": "boolean",
+            "description": "Whether results came from cache"
+          }
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "description": "Operation output",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "Human-readable 1-2 sentence summary"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["severity", "component", "observation"],
+            "properties": {
+              "severity": { "type": "string", "enum": ["critical", "warning", "info"] },
+              "component": { "type": "string" },
+              "observation": { "type": "string" },
+              "evidence": { "type": "string" },
+              "recommendation": { "type": "string" },
+              "auto_remediation_available": { "type": "boolean" }
+            }
+          }
+        },
+        "metrics_snapshot": {
+          "type": "object",
+          "description": "Key metrics at time of operation",
+          "properties": {
+            "cpu_utilization_avg": { "type": "number" },
+            "memory_utilization_avg": { "type": "number" },
+            "pod_restart_count": { "type": "integer" },
+            "error_log_count": { "type": "integer" },
+            "node_count": { "type": "integer" }
+          }
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Agent confidence in the assessment (0-1)"
+        }
+      }
+    },
+    "actions_taken": {
+      "type": "array",
+      "description": "Any remediation actions performed",
+      "items": {
+        "type": "object",
+        "required": ["action", "target", "status"],
+        "properties": {
+          "action": { "type": "string", "enum": ["scale", "restart", "rollback", "none"] },
+          "target": { "type": "string" },
+          "status": { "type": "string", "enum": ["completed", "pending_approval", "failed", "skipped"] },
+          "approval_required": { "type": "boolean" },
+          "approved_by": { "type": "string" }
+        }
+      }
+    },
+    "token_usage": {
+      "type": "object",
+      "description": "Token consumption tracking for efficiency",
+      "properties": {
+        "input_tokens": { "type": "integer" },
+        "output_tokens": { "type": "integer" },
+        "data_tokens_saved_by_filtering": { "type": "integer" }
+      }
+    }
+  }
+}

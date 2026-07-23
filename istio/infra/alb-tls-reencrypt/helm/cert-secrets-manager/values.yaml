@@ -1,0 +1,50 @@
+# Cross-Namespace Certificate Management via AWS Secrets Manager + External Secrets Operator
+# Certificates are stored in AWS Secrets Manager and synced to K8s namespaces via ESO
+
+externalSecrets:
+  enabled: true
+
+  # ClusterSecretStore configuration
+  secretStore:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+    provider:
+      aws:
+        service: SecretsManager
+        region: us-east-1
+        # Auth via IRSA (IAM Roles for Service Accounts)
+        auth:
+          jwt:
+            serviceAccountRef:
+              name: external-secrets-sa
+              namespace: external-secrets
+
+  # ExternalSecret configuration
+  externalSecret:
+    name: istio-ingress-tls
+    refreshInterval: 1h
+    secretArn: ""  # Set to your AWS Secrets Manager secret ARN
+    # The secret in AWS SM should contain keys: tls.crt, tls.key
+    dataFrom:
+      - extract:
+          key: ""  # AWS Secrets Manager secret name/ARN
+
+  # Target namespaces where the TLS secret will be created
+  targetNamespaces:
+    - istio-system
+    # Add additional namespaces as needed:
+    # - app-namespace-1
+    # - app-namespace-2
+
+  # Name of the K8s TLS secret created in each namespace
+  secretName: istio-ingress-tls
+
+  # Secret type
+  secretType: kubernetes.io/tls
+
+  # Template for the K8s secret
+  template:
+    type: kubernetes.io/tls
+    data:
+      tls.crt: "{{ .tls_crt }}"
+      tls.key: "{{ .tls_key }}"

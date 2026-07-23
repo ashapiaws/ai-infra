@@ -1,0 +1,56 @@
+# Cert-Manager Configuration for ALB TLS Re-encryption Pattern
+# Generates self-signed certificates for the Istio Ingress Gateway
+# Certificate is created BEFORE Istio Gateway via Helm hook ordering
+
+certManager:
+  # Namespace where cert-manager is installed
+  namespace: cert-manager
+
+# ClusterIssuer - Self-signed root CA
+clusterIssuer:
+  enabled: true
+  name: selfsigned-issuer
+  spec:
+    selfSigned: {}
+
+# CA Certificate - Used to sign gateway certificates
+caCertificate:
+  enabled: true
+  name: istio-ca
+  namespace: istio-system
+  secretName: istio-ca-secret
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+  isCA: true
+  commonName: "Istio CA"
+  duration: 8760h    # 1 year
+  renewBefore: 2920h # ~4 months
+
+# CA Issuer - Issues certs signed by the CA
+caIssuer:
+  enabled: true
+  name: istio-ca-issuer
+  namespace: istio-system
+  spec:
+    ca:
+      secretName: istio-ca-secret
+
+# Gateway Certificate - TLS cert for Istio Ingress Gateway
+# This cert is presented to ALB during TLS re-encryption
+gatewayCertificate:
+  enabled: true
+  name: istio-ingress-cert
+  namespace: istio-system
+  # Helm hook ensures cert is created before Istio Gateway
+  hookEnabled: true
+  hookWeight: "-5"
+  secretName: istio-ingress-tls
+  issuerRef:
+    name: istio-ca-issuer
+    kind: Issuer
+  dnsNames:
+    - "*.example.com"
+    - "istio-ingressgateway.istio-system.svc.cluster.local"
+  duration: 2160h    # 90 days
+  renewBefore: 720h  # 30 days (renew at 2/3 validity)

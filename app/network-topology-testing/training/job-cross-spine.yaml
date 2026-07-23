@@ -1,0 +1,160 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Training Job — CROSS-SPINE (No Placement Group)
+#
+# Targets nodes provisioned by the training-cross-spine Karpenter NodePool.
+# Nodes are NOT in a placement group — may land on different spines.
+# Uses pod anti-affinity on hostname to ensure nodes are on separate hosts
+# (but not necessarily same spine).
+# Expected: higher all-reduce latency, lower throughput vs same-spine.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: topology-training
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: training-headless-cross
+  namespace: topology-training
+spec:
+  clusterIP: None
+  selector:
+    app: topology-training
+    topology-mode: cross-spine
+  ports:
+    - name: nccl
+      port: 29500
+      targetPort: 29500
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: training-cross-spine
+  namespace: topology-training
+  labels:
+    app: topology-training
+    topology-mode: cross-spine
+    test: network-topology
+spec:
+  parallelism: 3
+  completions: 3
+  completionMode: Indexed
+  template:
+    metadata:
+      labels:
+        app: topology-training
+        topology-mode: cross-spine
+        test: network-topology
+    spec:
+      subdomain: training-headless-cross
+      restartPolicy: Never
+
+      # ─── Target cross-spine Karpenter nodes (NO placement group) ───
+      nodeSelector:
+        topology-test/node-group: cross-spine
+        node.kubernetes.io/instance-type: g6e.8xlarge
+
+      # Spread pods across different hosts (separate nodes guaranteed)
+      # Without a placement group, these hosts are likely on different spines
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: topology-training
+                  topology-mode: cross-spine
+              topologyKey: "kubernetes.io/hostname"
+
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+
+      containers:
+        - name: training
+          image: <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/topology-training:latest
+          args:
+            - "--nnodes=3"
+            - "--nproc_per_node=1"
+            - "--rdzv_id=cross-spine-test"
+            - "--rdzv_backend=c10d"
+            - "--rdzv_endpoint=training-cross-spine-0.training-headless-cross.topology-training.svc.cluster.local:29500"
+            - "train.py"
+            - "--topology-mode=cross-spine"
+            - "--run-id=cross-spine-$(date +%Y%m%d-%H%M%S)"
+
+          env:
+            # ── NCCL Configuration (EFA-enabled on g6e.8xlarge) ──
+            - name: NCCL_ALGO
+              value: "Ring"
+            - name: NCCL_PROTO
+              value: "Simple"
+            - name: NCCL_DEBUG
+              value: "INFO"
+            - name: NCCL_SOCKET_IFNAME
+              value: "eth0"
+
+            # ── EFA Configuration ──
+            - name: FI_PROVIDER
+              value: "efa"
+            - name: FI_EFA_USE_DEVICE_RDMA
+              value: "1"
+            - name: FI_EFA_FORK_SAFE
+              value: "1"
+            - name: RDMAV_FORK_SAFE
+              value: "1"
+
+            # ── Distributed Config ──
+            - name: MASTER_ADDR
+              value: "training-cross-spine-0.training-headless-cross.topology-training.svc.cluster.local"
+            - name: MASTER_PORT
+              value: "29500"
+
+            # ── Topology Metadata ──
+            - name: TOPOLOGY_MODE
+              value: "cross-spine"
+            - name: NODE_GROUP
+              value: "training-cross-spine"
+
+            # ── Pod Identity ──
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+          resources:
+            requests:
+              nvidia.com/gpu: 1
+              vpc.amazonaws.com/efa: 1
+              memory: "128Gi"
+              cpu: "16"
+            limits:
+              nvidia.com/gpu: 1
+              vpc.amazonaws.com/efa: 1
+              memory: "200Gi"
+              cpu: "32"
+
+          ports:
+            - containerPort: 29500
+              name: rdzv
+            - containerPort: 8000
+              name: metrics
+
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: results
+              mountPath: /workspace/results
+
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "32Gi"
+        - name: results
+          emptyDir: {}

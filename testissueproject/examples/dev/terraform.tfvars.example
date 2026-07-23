@@ -1,0 +1,146 @@
+# Development Environment Configuration
+# Smaller resource allocations for cost optimization
+
+aws_region = "us-west-2"
+
+cluster_name       = "dev-eks-cluster"
+kubernetes_version = "1.28"
+
+# Network Configuration - Auto-discovery enabled
+vpc_id = "vpc-12345678"
+subnet_type = "private"  # Use private subnets for development
+
+# Development endpoint configuration - more permissive
+endpoint_config = {
+  private_access      = true
+  public_access       = true
+  public_access_cidrs = ["0.0.0.0/0"]  # More permissive for development
+}
+
+# Shorter log retention for cost savings
+logging_config = {
+  enable_types   = ["api", "audit"]  # Reduced logging for dev
+  retention_days = 3
+}
+
+# Smaller node groups for development
+node_groups = {
+  primary = {
+    instance_types = ["t3.small"]  # Smaller instances
+    capacity_type  = "SPOT"        # Use spot for cost savings
+    
+    scaling_config = {
+      min_size     = 1
+      max_size     = 3
+      desired_size = 1
+    }
+    
+    placement_group = {
+      strategy = "cluster"
+      enabled  = false  # Disabled for smaller deployments
+    }
+    
+    labels = {
+      role        = "primary"
+      environment = "development"
+    }
+    taints = []
+    
+    ami_type  = "AL2_x86_64"
+    disk_size = 20  # Smaller disk
+  }
+  
+  secondary = {
+    instance_types = ["t3.small"]
+    capacity_type  = "SPOT"
+    
+    scaling_config = {
+      min_size     = 0
+      max_size     = 2
+      desired_size = 0  # Start with 0 for cost savings
+    }
+    
+    placement_group = {
+      strategy = "cluster"
+      enabled  = false
+    }
+    
+    labels = {
+      role        = "secondary"
+      environment = "development"
+    }
+    taints = []
+    
+    ami_type  = "AL2_x86_64"
+    disk_size = 20
+  }
+}
+
+# Reduced observability resources for development
+observability_config = {
+  namespace = "monitoring"
+  
+  prometheus = {
+    chart_version       = "25.8.0"
+    retention_days      = 7   # Shorter retention
+    storage_class       = "gp3"
+    storage_size        = "20Gi"  # Smaller storage
+    scrape_interval     = "60s"   # Less frequent scraping
+    evaluation_interval = "60s"
+    
+    resource_limits = {
+      cpu    = "500m"   # Reduced resources
+      memory = "2Gi"
+    }
+    resource_requests = {
+      cpu    = "250m"
+      memory = "1Gi"
+    }
+  }
+  
+  grafana = {
+    chart_version  = "7.0.8"
+    admin_password = "dev123!"  # Simple password for dev
+    storage_class  = "gp3"
+    storage_size   = "5Gi"      # Smaller storage
+    
+    ingress = {
+      enabled     = false
+      host        = ""
+      tls_enabled = false
+      annotations = {}
+    }
+    
+    resource_limits = {
+      cpu    = "200m"   # Reduced resources
+      memory = "512Mi"
+    }
+    resource_requests = {
+      cpu    = "100m"
+      memory = "256Mi"
+    }
+  }
+  
+  alertmanager = {
+    enabled       = false  # Disabled for development
+    storage_class = "gp3"
+    storage_size  = "5Gi"
+    
+    resource_limits = {
+      cpu    = "100m"
+      memory = "128Mi"
+    }
+    resource_requests = {
+      cpu    = "50m"
+      memory = "64Mi"
+    }
+  }
+}
+
+default_tags = {
+  Project     = "eks-observability-stack"
+  Environment = "development"
+  Owner       = "dev-team"
+  ManagedBy   = "terraform"
+  CostCenter  = "development"
+}

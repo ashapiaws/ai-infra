@@ -1,0 +1,56 @@
+# Prometheus Node Exporter Helm Values
+# Standalone Node Exporter deployment (use only if not using kube-prometheus-stack)
+
+# Host network and PID for complete metrics access
+hostNetwork: true
+hostPID: true
+
+# Root filesystem mount
+hostRootFsMount:
+  enabled: true
+  mountPropagation: HostToContainer
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 9100
+  targetPort: 9100
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+
+# ServiceMonitor for Prometheus Operator
+prometheus:
+  monitor:
+    enabled: true
+    namespace: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+    additionalLabels:
+      release: kube-prometheus-stack
+
+# Resource limits
+resources:
+  limits:
+    cpu: 200m
+    memory: 50Mi
+  requests:
+    cpu: 100m
+    memory: 30Mi
+
+# Tolerations to run on all nodes including tainted ones
+tolerations:
+  - operator: Exists
+
+# Update strategy
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+
+# Security context
+securityContext:
+  fsGroup: 65534
+  runAsGroup: 65534
+  runAsNonRoot: true
+  runAsUser: 65534

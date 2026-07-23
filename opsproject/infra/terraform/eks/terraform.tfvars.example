@@ -1,0 +1,40 @@
+# Copy this file to terraform.tfvars and customize as needed
+
+cluster_name    = "dev-ops-cluster-01"
+cluster_version = "1.32"
+region         = "us-east-2"
+
+# Your existing VPC subnet IDs
+subnet_ids = [
+  "subnet-051b1804545a4e3d3",  # us-east-2a - Primary and FSxL
+  "subnet-099b951fa3e709a3b"   # us-east-2b
+]
+
+# GPU instance types for compute workloads
+node_group_instance_types = ["g6e.12xlarge"]
+
+# Custom AMI ID (EKS optimized Amazon Linux 2023)
+node_group_ami_id = "ami-069c5809e5462c776"
+
+# Placement group for GPU instances
+placement_group_name = "test-rack-01"
+
+# EKS API endpoint configuration
+cluster_endpoint_private_access = true   # Nodes access via private endpoint
+cluster_endpoint_public_access  = true   # Operators can access via public endpoint
+
+# Restrict public access to specific IPs/CIDRs (optional)
+# cluster_endpoint_public_access_cidrs = [
+#   "203.0.113.0/24",  # Your office IP range
+#   "198.51.100.0/24"  # Your VPN IP range
+# ]
+
+# Resource tags
+tags = {
+  env         = "dev"
+  role        = "compute"
+  team        = "ops-team"
+  auto-delete = "no"
+  Environment = "development"
+  Project     = "gpu-compute-cluster"
+}

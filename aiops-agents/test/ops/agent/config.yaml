@@ -1,0 +1,69 @@
+# DevOps Agent Configuration
+# Defines agent behavior, tool bindings, and operational constraints.
+
+agent:
+  name: aiops-devops-agent
+  version: "1.0.0"
+  description: >
+    Kubernetes cluster operations agent with deterministic log querying
+    and grounded metric validation.
+
+  # Modes the agent can operate in
+  modes:
+    - name: diagnose
+      description: Investigate issues using logs and metrics
+      tools: [log_query, metrics_query, k8s_describe]
+      max_tokens_per_query: 2000
+
+    - name: monitor
+      description: Periodic health check summarization
+      tools: [metrics_query, k8s_list]
+      max_tokens_per_query: 1000
+
+    - name: remediate
+      description: Execute corrective actions (requires approval)
+      tools: [k8s_scale, k8s_restart, k8s_apply]
+      requires_approval: true
+
+  # Token budget constraints
+  token_budget:
+    max_context_tokens: 4000
+    max_response_tokens: 1000
+    prefer_structured_output: true
+
+  # Data sources
+  data_sources:
+    cloudwatch_logs:
+      log_groups:
+        - "/aws/eks/${CLUSTER_NAME}/app"
+        - "/aws/eks/${CLUSTER_NAME}/cluster"
+        - "/aws/containerinsights/${CLUSTER_NAME}/performance"
+      default_time_range: "15m"
+      max_results: 50
+
+    cloudwatch_metrics:
+      namespaces:
+        - ContainerInsights
+        - AWS/EKS
+      default_period: 300  # 5 minutes
+      default_stat: Average
+
+    kubernetes:
+      namespaces:
+        - aiops-app
+        - amazon-cloudwatch
+        - kube-system
+
+  # Pre-processing rules to reduce token usage
+  preprocessing:
+    - type: dedup_logs
+      window: "5m"
+      threshold: 3  # Group if 3+ identical messages
+
+    - type: metric_threshold_filter
+      only_anomalies: true
+      threshold_std_dev: 2.0
+
+    - type: truncate_stack_traces
+      max_lines: 5
+      keep_first_and_last: true

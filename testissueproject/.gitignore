@@ -1,0 +1,43 @@
+# Terraform files
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+*.tfplan
+crash.log
+crash.*.log
+
+# Environment files
+environments/*.tfvars
+!environments/*.tfvars.example
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Backup files
+*.backup
+*.bak
+
+# Helm charts (if downloaded locally)
+charts/
+
+# Kubernetes config
+kubeconfig*
+!kubeconfig.example

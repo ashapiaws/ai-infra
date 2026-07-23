@@ -1,0 +1,16 @@
+{
+  "name": "error-summary",
+  "description": "Summarize error logs by count and component in a time window",
+  "version": "1.0.0",
+  "parameters": {
+    "cluster_name": { "type": "string", "required": true },
+    "time_range_minutes": { "type": "integer", "default": 15 },
+    "namespace": { "type": "string", "default": "aiops-app" }
+  },
+  "query": "fields @timestamp, @message, kubernetes.namespace_name, kubernetes.pod_name\n| filter @message like /(?i)(error|exception|fail|panic)/\n| filter kubernetes.namespace_name = '${namespace}'\n| stats count(*) as error_count by kubernetes.pod_name, @message\n| sort error_count desc\n| limit 20",
+  "log_group": "/aws/containerinsights/${cluster_name}/application",
+  "output_format": {
+    "type": "table",
+    "columns": ["pod_name", "message", "error_count"]
+  }
+}

@@ -1,0 +1,140 @@
+---
+# vLLM Multi-GPU Deployment — Tensor Parallelism
+# Target: g6e.12xlarge (4x L40S, 192 GB total GPU memory)
+# Model: meta-llama/Llama-3.1-70B-Instruct
+#
+# Use this for larger models that require tensor parallelism.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-70b-config
+  namespace: inference
+data:
+  MODEL_ID: "meta-llama/Llama-3.1-70B-Instruct"
+  MAX_MODEL_LEN: "8192"
+  TENSOR_PARALLEL_SIZE: "4"
+  GPU_MEMORY_UTILIZATION: "0.90"
+  ENABLE_PREFIX_CACHING: "true"
+  ENABLE_CHUNKED_PREFILL: "true"
+  MAX_NUM_SEQS: "128"
+  QUANTIZATION: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-70b-inference
+  namespace: inference
+  labels:
+    app: vllm-70b-inference
+    model: llama-3-1-70b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-70b-inference
+  template:
+    metadata:
+      labels:
+        app: vllm-70b-inference
+        model: llama-3-1-70b
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      nodeSelector:
+        node.kubernetes.io/instance-type: g6e.12xlarge
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          env:
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+            - name: NCCL_DEBUG
+              value: "WARN"
+          args:
+            - "--model"
+            - "$(MODEL_ID)"
+            - "--max-model-len"
+            - "$(MAX_MODEL_LEN)"
+            - "--tensor-parallel-size"
+            - "$(TENSOR_PARALLEL_SIZE)"
+            - "--gpu-memory-utilization"
+            - "$(GPU_MEMORY_UTILIZATION)"
+            - "--max-num-seqs"
+            - "$(MAX_NUM_SEQS)"
+            - "--enable-prefix-caching"
+            - "--enable-chunked-prefill"
+            - "--port"
+            - "8000"
+            - "--served-model-name"
+            - "llama-3.1-70b"
+          envFrom:
+            - configMapRef:
+                name: vllm-70b-config
+          resources:
+            requests:
+              cpu: "16"
+              memory: "64Gi"
+              nvidia.com/gpu: "4"
+            limits:
+              cpu: "32"
+              memory: "128Gi"
+              nvidia.com/gpu: "4"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 300
+            periodSeconds: 15
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 360
+            periodSeconds: 30
+            timeoutSeconds: 10
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 200Gi
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi
+      terminationGracePeriodSeconds: 120
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-70b-inference
+  namespace: inference
+  labels:
+    app: vllm-70b-inference
+spec:
+  selector:
+    app: vllm-70b-inference
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  type: ClusterIP

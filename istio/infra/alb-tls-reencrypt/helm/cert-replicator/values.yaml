@@ -1,0 +1,47 @@
+# Cross-Namespace Certificate Management via Kubernetes Replicator
+# cert-manager generates self-signed certs, Kubernetes Replicator replicates them across namespaces
+
+replicator:
+  enabled: true
+
+  # Kubernetes Replicator controller deployment
+  controller:
+    # If using Replicator Helm chart as subchart, set to true
+    installChart: true
+    # Replicator Helm chart version
+    chartVersion: "2.9.2"
+
+# cert-manager Certificate configuration
+certificate:
+  enabled: true
+  name: istio-ingress-cert
+  namespace: istio-system
+  secretName: istio-ingress-tls
+
+  # Helm hook for ordering (cert before Istio Gateway)
+  hookEnabled: true
+  hookWeight: "-5"
+
+  # Certificate spec
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.example.com"
+    - "istio-ingressgateway.istio-system.svc.cluster.local"
+  duration: 2160h    # 90 days
+  renewBefore: 720h  # 30 days
+
+  # Kubernetes Replicator annotations on the generated secret
+  # These tell Replicator which namespaces to replicate to
+  secretAnnotations:
+    replicator.v1/replicate-to: "default"
+    # Alternative: replicate to namespaces matching a label
+    # replicator.v1/replicate-to-matching: "needs-istio-tls=true"
+
+# Target namespaces for replication (comma-separated in annotation)
+targetNamespaces:
+  - default
+  # Add additional namespaces:
+  # - app-namespace-1
+  # - app-namespace-2

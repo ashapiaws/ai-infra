@@ -1,0 +1,42 @@
+# Local Terraform state files
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# Local .terraform directories
+.terraform/
+.terraform.tfstate.lock.info
+
+# Override files (often used for local development/testing)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Terraform Cloud / HCP Terraform configuration files
+.terraformrc
+terraform.rc
+terraform.tfstate
+terraform.tfstate.*
+
+# Kiro specific files (if you are using the Kiro Terraform provider or automation tools)
+*.kiro
+.kiro
+
+#Claude
+.Claude
+Claude.md
+
+# OS and Editor directories
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+.vnev
+.venv

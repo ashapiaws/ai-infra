@@ -1,0 +1,48 @@
+# Cross-Namespace Certificate Management via Reflector
+# cert-manager generates self-signed certs, Reflector replicates them across namespaces
+
+reflector:
+  enabled: true
+
+  # Reflector controller deployment
+  controller:
+    # If using Reflector Helm chart as subchart, set to true
+    installChart: true
+    # Reflector Helm chart version
+    chartVersion: "7.1.216"
+
+# cert-manager Certificate configuration
+certificate:
+  enabled: true
+  name: istio-ingress-cert
+  namespace: istio-system
+  secretName: istio-ingress-tls
+
+  # Helm hook for ordering (cert before Istio Gateway)
+  hookEnabled: true
+  hookWeight: "-5"
+
+  # Certificate spec
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.example.com"
+    - "istio-ingressgateway.istio-system.svc.cluster.local"
+  duration: 2160h    # 90 days
+  renewBefore: 720h  # 30 days
+
+  # Reflector annotations on the generated secret
+  # These tell Reflector which namespaces to replicate to
+  secretAnnotations:
+    reflector.v1/reflection-allowed: "true"
+    reflector.v1/reflection-allowed-namespaces: "istio-system,default"
+    reflector.v1/reflection-auto-enabled: "true"
+    reflector.v1/reflection-auto-namespaces: "istio-system,default"
+
+# Target namespaces for replication (used in annotations)
+targetNamespaces:
+  - default
+  # Add additional namespaces:
+  # - app-namespace-1
+  # - app-namespace-2

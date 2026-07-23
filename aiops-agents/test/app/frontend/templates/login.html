@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIOps Test - Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+        }
+        h1 { text-align: center; margin-bottom: 2rem; color: #00d4aa; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; }
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #16213e;
+            color: #eee;
+            font-size: 1rem;
+        }
+        input:focus { outline: none; border-color: #00d4aa; }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background: #00d4aa;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+        button:hover { background: #00b894; }
+        .result { margin-top: 2rem; padding: 1rem; background: #16213e; border-radius: 6px; display: none; }
+        .result.show { display: block; }
+        .result.error { border-left: 3px solid #e74c3c; }
+        .result.success { border-left: 3px solid #00d4aa; }
+        .task { padding: 0.5rem 0; border-bottom: 1px solid #333; }
+        .task:last-child { border-bottom: none; }
+        .task-title { font-weight: bold; }
+        .task-meta { font-size: 0.8rem; color: #888; margin-top: 0.25rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AIOps Task Manager</h1>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+            <button type="submit">Login</button>
+        </form>
+        <div id="result" class="result"></div>
+    </div>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const resultEl = document.getElementById('result');
+
+            try {
+                const res = await fetch('/login', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.success) {
+                    resultEl.className = 'result show success';
+                    let html = `<p>Welcome, <strong>${data.user}</strong>! (${data.task_count} tasks)</p>`;
+                    if (data.tasks.length > 0) {
+                        html += '<div style="margin-top:1rem">';
+                        data.tasks.forEach(t => {
+                            html += `<div class="task">
+                                <div class="task-title">${t.title}</div>
+                                <div class="task-meta">Status: ${t.status} | Priority: ${t.priority} | Due: ${t.due_date || 'None'}</div>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    }
+                    resultEl.innerHTML = html;
+                } else {
+                    resultEl.className = 'result show error';
+                    resultEl.innerHTML = `<p>${data.error}</p>`;
+                }
+            } catch (err) {
+                resultEl.className = 'result show error';
+                resultEl.innerHTML = `<p>Connection error: ${err.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

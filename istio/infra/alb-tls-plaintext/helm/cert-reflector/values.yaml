@@ -1,0 +1,36 @@
+# Cross-Namespace Certificate Management via Reflector
+# For ALB Plaintext pattern - certificates used for mesh-internal TLS
+
+reflector:
+  enabled: true
+  controller:
+    installChart: true
+    chartVersion: "7.1.216"
+
+certificate:
+  enabled: true
+  name: istio-mesh-cert
+  namespace: istio-system
+  secretName: istio-mesh-tls
+
+  hookEnabled: true
+  hookWeight: "-5"
+
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.example.com"
+    - "*.istio-system.svc.cluster.local"
+  duration: 2160h
+  renewBefore: 720h
+
+  # Reflector annotations
+  secretAnnotations:
+    reflector.v1/reflection-allowed: "true"
+    reflector.v1/reflection-allowed-namespaces: "istio-system,default"
+    reflector.v1/reflection-auto-enabled: "true"
+    reflector.v1/reflection-auto-namespaces: "istio-system,default"
+
+targetNamespaces:
+  - default

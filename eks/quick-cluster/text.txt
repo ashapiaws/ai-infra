@@ -1,0 +1,90 @@
+#efa-cluster.yaml
+
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: csi-fsx
+  region: us-east-1
+  version: "1.30"
+
+iam:
+  withOIDC: true
+
+availabilityZones: ["us-east-1a", "us-east-1d"]
+
+managedNodeGroups:
+  - name: my-efa-ng
+    instanceType: c6gn.16xlarge
+    minSize: 2
+    desiredCapacity: 2
+    maxSize: 4
+    availabilityZones: ["us-east-1b"]
+    volumeSize: 300
+    privateNetworking: true
+    amiFamily: Ubuntu2204
+    efaEnabled: true
+    preBootstrapCommands:
+      - |
+        #!/bin/bash
+        eth_intf="$(/sbin/ip -br -4 a sh | grep $(hostname -i)/ | awk '{print $1}')"
+        efa_version=$(modinfo efa | awk '/^version:/ {print $2}' | sed 's/[^0-9.]//g')
+        min_efa_version="2.12.1"
+
+        if [[ "$(printf '%s\n' "$min_efa_version" "$efa_version" | sort -V | head -n1)" != "$min_efa_version" ]]; then
+            sudo curl -O https://efa-installer.amazonaws.com/aws-efa-installer-1.37.0.tar.gz
+            tar -xf aws-efa-installer-1.37.0.tar.gz && cd aws-efa-installer
+            echo "Installing EFA driver"
+            sudo apt-get update && apt-get upgrade -y
+            sudo apt install -y pciutils environment-modules libnl-3-dev libnl-route-3-200 libnl-route-3-dev dkms
+            sudo ./efa_installer.sh -y
+            modinfo efa
+        else
+            echo "Using EFA driver version $efa_version"
+        fi
+
+        echo "Installing Lustre client"
+        sudo wget -O - https://fsx-lustre-client-repo-public-keys.s3.amazonaws.com/fsx-ubuntu-public-key.asc | gpg --dearmor | sudo tee /usr/share/keyrings/fsx-ubuntu-public-key.gpg > /dev/null
+        sudo echo "deb [signed-by=/usr/share/keyrings/fsx-ubuntu-public-key.gpg] https://fsx-lustre-client-repo.s3.amazonaws.com/ubuntu jammy main" > /etc/apt/sources.list.d/fsxlustreclientrepo.list
+        sudo apt update | tail
+        sudo apt install -y lustre-client-modules-$(uname -r) amazon-ec2-utils | tail
+        modinfo lustre
+
+        echo "Loading Lustre/EFA modules..."
+        sudo /sbin/modprobe lnet
+        sudo /sbin/modprobe kefalnd ipif_name="$eth_intf"
+        sudo /sbin/modprobe ksocklnd
+        sudo lnetctl lnet configure
+
+        echo "Configuring TCP interface..."
+        sudo lnetctl net del --net tcp 2> /dev/null
+        sudo lnetctl net add --net tcp --if $eth_intf
+
+        # For P5 instance type which supports 32 network cards,
+        # by default add 8 EFA interfaces selecting every 4th device (1 per PCI bus)
+        echo "Configuring EFA interface(s)..."
+        instance_type="$(ec2-metadata --instance-type | awk '{ print $2 }')"
+        num_efa_devices="$(ls -1 /sys/class/infiniband | wc -l)"
+        echo "Found $num_efa_devices available EFA device(s)"
+
+        if [[ "$instance_type" == "p5.48xlarge" || "$instance_type" == "p5e.48xlarge" ]]; then
+           for intf in $(ls -1 /sys/class/infiniband | awk 'NR % 4 == 1'); do
+               sudo lnetctl net add --net efa --if $intf --peer-credits 32
+          done
+        else
+        # Other instances: Configure 2 EFA interfaces by default if the instance supports multiple network cards,
+        # or 1 interface for single network card instances
+        # Can be modified to add more interfaces if instance type supports it
+            sudo lnetctl net add --net efa --if $(ls -1 /sys/class/infiniband | head -n1) --peer-credits 32
+            if [[ $num_efa_devices -gt 1 ]]; then
+               sudo lnetctl net add --net efa --if $(ls -1 /sys/class/infiniband | tail -n1) --peer-credits 32
+            fi
+        fi
+
+        echo "Setting discovery and UDSP rule"
+        sudo lnetctl set discovery 1
+        sudo lnetctl udsp add --src efa --priority 0
+        sudo /sbin/modprobe lustre
+
+        sudo lnetctl net show
+        echo "Added $(sudo lnetctl net show | grep -c '@efa') EFA interface(s)"

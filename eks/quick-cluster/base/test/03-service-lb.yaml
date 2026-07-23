@@ -1,0 +1,54 @@
+---
+# Deployment backing the LoadBalancer service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-lb-test
+  namespace: infra-test
+  labels:
+    app: nginx-lb-test
+    test: service-lb
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-lb-test
+  template:
+    metadata:
+      labels:
+        app: nginx-lb-test
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+# Service type LoadBalancer - AWS LB Controller provisions a NLB
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-lb-test
+  namespace: infra-test
+  labels:
+    test: service-lb
+  annotations:
+    # AWS LB Controller annotations for NLB
+    service.beta.kubernetes.io/aws-load-balancer-type: "external"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx-lb-test
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP

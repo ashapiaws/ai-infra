@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Chat - Simple Inference</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>AI Chat</h1>
+      <div class="controls">
+        <select id="model-select" aria-label="Select model">
+          <option value="model-a">Model A (vLLM)</option>
+          <option value="model-b">Model B (vLLM)</option>
+          <option value="bedrock-claude-sonnet-4">Claude Sonnet 4 (Bedrock)</option>
+        </select>
+        <button id="clear-btn" title="Clear chat">Clear</button>
+      </div>
+    </header>
+
+    <main id="chat-container">
+      <div class="message system">
+        <p>Select a model and start chatting. Requests route to vLLM or Bedrock based on model selection.</p>
+      </div>
+    </main>
+
+    <footer>
+      <form id="chat-form">
+        <textarea
+          id="user-input"
+          placeholder="Type your message..."
+          rows="1"
+          autofocus
+        ></textarea>
+        <button type="submit" id="send-btn">Send</button>
+      </form>
+      <p class="meta">
+        Routing: <span id="route-info">Envoy AI Gateway → vLLM (model-a)</span>
+      </p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
