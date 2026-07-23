@@ -134,9 +134,34 @@ variable "nvidia_operator_version" {
 }
 
 variable "vllm_version" {
-  description = "Helm chart version for vLLM"
+  description = "Helm chart version for vllm-stack (leave empty for latest)"
   type        = string
-  default     = "0.7.3"
+  default     = ""
+}
+
+variable "vllm_model_name" {
+  description = "Name identifier for the vLLM model deployment"
+  type        = string
+  default     = "vllm"
+}
+
+variable "vllm_model_url" {
+  description = "HuggingFace model ID for vLLM (e.g. meta-llama/Llama-3.1-8B-Instruct)"
+  type        = string
+  default     = ""
+}
+
+variable "vllm_gpu_count" {
+  description = "Number of GPUs per vLLM replica"
+  type        = number
+  default     = 1
+}
+
+variable "hf_token" {
+  description = "HuggingFace API token for gated model access"
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 variable "sglang_version" {

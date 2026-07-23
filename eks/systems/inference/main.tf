@@ -85,6 +85,10 @@ module "vllm" {
   count  = var.enable_vllm ? 1 : 0
 
   chart_version = var.vllm_version
+  model_name    = var.vllm_model_name
+  model_url     = var.vllm_model_url
+  hf_token      = var.hf_token
+  gpu_count     = var.vllm_gpu_count
   tags          = var.tags
 
   depends_on = [module.nvidia_operator]
